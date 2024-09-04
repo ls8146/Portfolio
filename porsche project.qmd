@@ -1,0 +1,131 @@
+---
+title: "Porsche Project"
+author: "Levi Sayles"
+format: html
+editor: visual
+---
+
+## Running Code
+
+Loading the Librarys
+
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+library(readr)
+library(tidyverse)
+library(scales)
+```
+
+Loading the data and performing necessary cleaning
+
+```{r}
+# Load the data
+data <- read_csv("https://myxavier-my.sharepoint.com/:x:/g/personal/saylesl_xavier_edu/EaL989pm6tpCsPk6IMesXMwBAjbs0OQJny5jrX1U3DIxQQ?download=1")
+
+# Convert columns that might have mixed data types to numeric, handling errors and non-string data gracefully
+clean_numeric_column <- function(column) {
+  # Remove all non-numeric characters except "." and "-"
+  clean_column <- gsub("[^0-9.-]", "", as.character(column))
+  # Convert to numeric
+  return(as.numeric(clean_column))
+}
+
+# Define columns to clean
+columns_to_convert <- c('acceleration_0-100km/h', 'power', 'torque', 
+                        'engine_displacement', 'weight-to-power_ratio', 
+                        'weight-to-torque_ratio', 'maximum_speed')
+
+# Apply the cleaning function to relevant columns
+data <- data %>%
+  mutate(across(all_of(columns_to_convert), clean_numeric_column))
+
+# Check for remaining NA values after coercion
+colSums(is.na(data[columns_to_convert]))
+
+# Drop rows with missing essential values for the graphs
+data_cleaned <- data %>%
+  drop_na(`acceleration_0-100km/h`, power, torque, engine_displacement, `weight-to-power_ratio`)
+
+# Overview of cleaned data
+summary(data_cleaned)
+```
+
+# Graph 1:
+
+This scatter plot shows the relationship between power and torque for different fuel types. Each point represents a car, and the colors indicate different fuel types. The regression lines are added to visualize the trend for each fuel type.
+
+```{r}
+
+ggplot(data_cleaned, aes(x = torque, y = power, color = fuel_type)) +
+  geom_point(size = 3, alpha = 0.7) +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(title = "Power vs. Torque by Fuel Type",
+       x = "Torque (Nm)",
+       y = "Power (HP)",
+       color = "Fuel Type") +
+  theme_minimal()
+```
+
+# Graph 2:
+
+This histogram with a density curve illustrates the distribution of acceleration times (0-100 km/h). The density curve provides a smoothed representation of the distribution.
+
+```{r}
+ggplot(data_cleaned, aes(x = `acceleration_0-100km/h`)) +
+  geom_histogram(aes(y = ..density..), bins = 15, fill = "skyblue", color = "black", alpha = 0.7) +
+  geom_density(color = "red", size = 1) +
+  labs(title = "Distribution of Acceleration (0-100 km/h)",
+       x = "Acceleration 0-100 km/h (seconds)",
+       y = "Density") +
+  theme_minimal()
+```
+
+# Graph 3:
+
+This boxplot compares the distribution of engine displacement and power across different generations of the Porsche 911. It shows the median, quartiles, and potential outliers for each generation, allowing us to observe how these metrics vary over time.
+
+```{r}
+data_cleaned <- data_cleaned %>%
+  mutate(power = power / 10000)
+
+ggplot(data_cleaned, aes(x = generation, y = power, fill = generation)) +
+  geom_boxplot() +
+  labs(title = "Engine Displacement vs. Power by Generation",
+       x = "Generation",
+       y = "Power (HP)",
+       fill = "Generation") +
+  scale_y_continuous(labels = comma) +  # Format y-axis with actual numbers (no scientific notation)
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+# Graph 4:
+
+This bar plot shows the weight-to-power ratio for different body types of the Porsche 911. The weight-to-power ratio is an important metric for understanding the performance of a vehicle, and this plot allows for easy comparison between body types.
+
+```{r}
+ggplot(data_cleaned, aes(x = body_type, y = weight-to-power_ratio, fill = body_type)) +
+  geom_bar(stat = "identity", color = "black", alpha = 0.7) +
+  labs(title = "Weight-to-Power Ratio by Body Type",
+       x = "Body Type",
+       y = "Weight-to-Power Ratio (kg/HP)",
+       fill = "Body Type") +
+  theme_minimal() +
+  coord_flip()
+```
+
+# Graph 5:
+
+This scatter plot shows the relationship between maximum speed and engine displacement. A smoothing line is added to help visualize the trend. This graph can help us understand how engine size affects the top speed of the Porsche 911 models.
+
+```{r}
+ggplot(data_cleaned, aes(x = engine_displacement, y = maximum_speed)) +
+  geom_point(size = 3, color = "blue", alpha = 0.7) +
+  geom_smooth(method = "loess", color = "red") +
+  labs(title = "Maximum Speed vs. Engine Displacement",
+       x = "Engine Displacement (cc)",
+       y = "Maximum Speed (km/h)") +
+  theme_minimal()
+```
