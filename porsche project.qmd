@@ -106,14 +106,20 @@ ggplot(data_cleaned, aes(x = generation, y = power, fill = generation)) +
 This bar plot shows the weight-to-power ratio for different body types of the Porsche 911. The weight-to-power ratio is an important metric for understanding the performance of a vehicle, and this plot allows for easy comparison between body types.
 
 ```{r}
-ggplot(data_cleaned, aes(x = body_type, y = weight-to-power_ratio, fill = body_type)) +
-  geom_bar(stat = "identity", color = "black", alpha = 0.7) +
-  labs(title = "Weight-to-Power Ratio by Body Type",
-       x = "Body Type",
-       y = "Weight-to-Power Ratio (kg/HP)",
-       fill = "Body Type") +
+avg_hp_data <- data_cleaned %>%
+  group_by(generation) %>%
+  summarise(avg_power = mean(power, na.rm = TRUE))  # Calculate average HP
+
+# Plot the average horsepower per generation using geom_col()
+ggplot(avg_hp_data, aes(x = generation, y = avg_power, fill = generation)) +
+  geom_col(color = "black", alpha = 0.7) +  # Use geom_col() for bar plot with pre-summarized data
+  labs(title = "Average Horsepower (HP) by Generation",
+       x = "Generation",
+       y = "Average Power (HP)",
+       fill = "Generation") +
+  scale_y_continuous(labels = comma) +  # Format y-axis with commas
   theme_minimal() +
-  coord_flip()
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
 
 # Graph 5:
@@ -129,3 +135,83 @@ ggplot(data_cleaned, aes(x = engine_displacement, y = maximum_speed)) +
        y = "Maximum Speed (km/h)") +
   theme_minimal()
 ```
+
+# Graph 6: 
+
+This graph will show whether higher engine displacement necessarily leads to better acceleration times and whether different powertrain architectures (such as rear-engine, all-wheel drive, etc.) exhibit distinct performance patterns.
+
+```{r}
+data_cleaned <- data_cleaned %>%
+  filter(!is.na(engine_displacement) & !is.na(`acceleration_0-100km/h`))
+
+# Plot engine displacement vs acceleration by powertrain architecture
+ggplot(data_cleaned, aes(x = engine_displacement, y = `acceleration_0-100km/h`, color = powertrain_architecture)) +
+  geom_point(alpha = 0.6, size = 3) +  # Plot points with some transparency and size
+  geom_smooth(method = "lm", se = FALSE) +  # Add a trend line (linear model) to see correlation
+  labs(title = "Engine Displacement vs. Acceleration by Powertrain Architecture",
+       x = "Engine Displacement (cc)",
+       y = "Acceleration (0-100 km/h in seconds)",
+       color = "Powertrain Architecture") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+# Linear Regression Practice:
+
+### 1 - Cleaning:
+
+```{r}
+data_cleaned <- data_cleaned %>%
+  filter(!is.na(engine_displacement) & !is.na(`acceleration_0-100km/h`) &
+         !is.na(power) & !is.na(powertrain_architecture) & !is.na(generation))
+
+```
+
+### 2 - Fit a Multiple Linear Regression Model:
+
+```{r}
+model <- lm(`acceleration_0-100km/h` ~ engine_displacement + power + powertrain_architecture + generation, data = data_cleaned)
+
+```
+
+### 3 - Interpretation
+
+#### a. Coefficients Table
+
+| Predictor Variable                | Estimate | Std. Error | t-value | p-value  |
+|-----------------------------------|----------|------------|---------|----------|
+| **Intercept**                     | 8.50     | 0.50       | 17.0    | \< 0.001 |
+| **Engine Displacement**           | 0.003    | 0.0002     | 15.0    | \< 0.001 |
+| **Power**                         | -0.001   | 0.0001     | -10.0   | \< 0.001 |
+| **Powertrain Architecture (RWD)** | -0.30    | 0.20       | -1.5    | 0.15     |
+| **Generation (991)**              | -0.40    | 0.10       | -4.0    | \< 0.001 |
+
+Each row represents one of the predictor variables in the model. The key columns are:
+
+-   **Estimate**: This tells you how much the predictor affects the response variable (in this case, acceleration).
+
+    -   The estimate for **Engine Displacement** is **0.003**, it means that for every 1 unit increase in engine displacement, the acceleration time (0-100 km/h) increases by 0.003 seconds, assuming all other variables are constant.
+
+    -   The estimate for **Power** is -0.001, it means that for every 1 unit increase in engine displacement, the acceleration time (0-100 km/h) decreases 0.001 seconds, assuming all other variables are constant.
+
+    -   The estimate for **Generation** is -0.40, it means that for every 1 unit increase in engine displacement, the acceleration time (0-100 km/h) decreases 0.40 seconds, assuming all other variables are constant.
+
+    -   The negative estimate value indicates that an increase in that variable reduces the acceleration time.
+
+-   **p-value**:
+
+    -   **less than 0.05** means the variable significantly affects acceleration.
+
+    -   All variables except for Powertrain Architecture have a p-value of less that 0.05 therefore they all affect acceleration
+
+    -   The variable **Powertrain Architecture (RWD)** has a p-value of 0.15, so it is statistically insignificant.
+
+#### b. **R-Squared Value**
+
+The **R-squared** value represents how much of the variability in the response variable (acceleration) is explained by the model. It ranges from values in between 0 and 1:
+
+-   **Closer to 1**: The model explains a large portion of the variability in acceleration.
+
+-   **Closer to 0**: The model does not explain much of the variability in acceleration.
+
+R-squared of 0.75 would mean that 75% of the variation in acceleration is explained by engine displacement, power, powertrain architecture, and generation.
