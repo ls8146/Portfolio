@@ -7,7 +7,7 @@ editor: visual
 
 ## Running Code
 
-Loading the Librarys
+Loading the Libraries
 
 ```{r}
 # Load necessary libraries
@@ -58,15 +58,19 @@ This scatter plot shows the relationship between power and torque for different 
 
 ```{r}
 
-ggplot(data_cleaned, aes(x = torque, y = power, color = fuel_type)) +
+ggplot(data_cleaned, aes(x = torque / 10000, y = power / 10000)) +
   geom_point(size = 3, alpha = 0.7) +
   geom_smooth(method = "lm", se = FALSE) +
-  labs(title = "Power vs. Torque by Fuel Type",
-       x = "Torque (Nm)",
-       y = "Power (HP)",
+  labs(title = "Power vs. Torque",
+       x = "Torque (kNm)",  # Adjusted the unit
+       y = "Power (kHP)",   # Adjusted the unit
        color = "Fuel Type") +
+  scale_x_continuous(labels = scales::comma) +  # Ensures proper number format
+  scale_y_continuous(labels = scales::comma) +  # Ensures proper number format
   theme_minimal()
 ```
+
+\+
 
 # Graph 2:
 
@@ -75,11 +79,11 @@ This histogram with a density curve illustrates the distribution of acceleration
 ```{r}
 ggplot(data_cleaned, aes(x = `acceleration_0-100km/h`)) +
   geom_histogram(aes(y = ..density..), bins = 15, fill = "skyblue", color = "black", alpha = 0.7) +
-  geom_density(color = "red", size = 1) +
+  geom_density(color = "purple", size = 1) +
   labs(title = "Distribution of Acceleration (0-100 km/h)",
        x = "Acceleration 0-100 km/h (seconds)",
        y = "Density") +
-  theme_minimal()
+  theme_bw()
 ```
 
 # Graph 3:
@@ -128,15 +132,15 @@ This scatter plot shows the relationship between maximum speed and engine displa
 
 ```{r}
 ggplot(data_cleaned, aes(x = engine_displacement, y = maximum_speed)) +
-  geom_point(size = 3, color = "blue", alpha = 0.7) +
-  geom_smooth(method = "loess", color = "red") +
+  geom_point(size = 3, color = "maroon", alpha = 0.7) +
+  geom_smooth(method = "loess", color = "skyblue") +
   labs(title = "Maximum Speed vs. Engine Displacement",
        x = "Engine Displacement (cc)",
        y = "Maximum Speed (km/h)") +
-  theme_minimal()
+  theme_bw()
 ```
 
-# Graph 6: 
+# Graph 6:
 
 This graph will show whether higher engine displacement necessarily leads to better acceleration times and whether different powertrain architectures (such as rear-engine, all-wheel drive, etc.) exhibit distinct performance patterns.
 
@@ -145,7 +149,7 @@ data_cleaned <- data_cleaned %>%
   filter(!is.na(engine_displacement) & !is.na(`acceleration_0-100km/h`))
 
 # Plot engine displacement vs acceleration by powertrain architecture
-ggplot(data_cleaned, aes(x = engine_displacement, y = `acceleration_0-100km/h`, color = powertrain_architecture)) +
+ggplot(data_cleaned, aes(x = engine_displacement, y = `acceleration_0-100km/h`, color = powertrain_architectur)) +
   geom_point(alpha = 0.6, size = 3) +  # Plot points with some transparency and size
   geom_smooth(method = "lm", se = FALSE) +  # Add a trend line (linear model) to see correlation
   labs(title = "Engine Displacement vs. Acceleration by Powertrain Architecture",
@@ -161,57 +165,128 @@ ggplot(data_cleaned, aes(x = engine_displacement, y = `acceleration_0-100km/h`, 
 ### 1 - Cleaning:
 
 ```{r}
-data_cleaned <- data_cleaned %>%
-  filter(!is.na(engine_displacement) & !is.na(`acceleration_0-100km/h`) &
-         !is.na(power) & !is.na(powertrain_architecture) & !is.na(generation))
+library(tidyverse)
+# Extract the numerical values from 'weight-to-power_ratio' and create a new column
+data <- data %>%
+  mutate(power_weight_kg_HP = str_extract(`weight-to-power_ratio`, "\\d+\\.?\\d*") %>% as.numeric())
+
+# View the first few rows of the updated dataset
+head(data %>% select(`weight-to-power_ratio`, power_weight_kg_HP))
+
+# Function to clean numeric columns by removing non-numeric characters
+clean_numeric_column <- function(x) {
+  as.numeric(gsub("[^0-9.]", "", x))
+}
+
+# Clean the 'power' and 'engine_displacement' columns
+data$power_clean <- clean_numeric_column(data$power)
+data$engine_displacement_clean <- clean_numeric_column(data$engine_displacement)
+data$power_weight_kg_HP_clean <- clean_numeric_column(data$power_weight_kg_HP)
+data$maximum_speed_clean <- clean_numeric_column(data$maximum_speed)
+data$cylinder_bore_clean <- clean_numeric_column(data$cylinder_bore)
+data$piston_stroke_clean <- clean_numeric_column(data$piston_stroke)
+
+# Convert 'acceleration_0-100km/h' to numeric
+data$`acceleration_0-100km/h` <- as.numeric(data$`acceleration_0-100km/h`)
+
+# Remove rows with missing values
+data_cleaned <- data %>%
+  drop_na(`acceleration_0-100km/h`, power_clean, engine_displacement_clean, power_weight_kg_HP_clean, maximum_speed_clean, cylinder_bore_clean, piston_stroke_clean)
 
 ```
 
 ### 2 - Fit a Multiple Linear Regression Model:
 
 ```{r}
-model <- lm(`acceleration_0-100km/h` ~ engine_displacement + power + powertrain_architecture + generation, data = data_cleaned)
+# Run the linear regression model
+model <- lm(`acceleration_0-100km/h` ~ power_clean + engine_displacement_clean + power_weight_kg_HP_clean + maximum_speed_clean + cylinder_bore_clean + piston_stroke_clean, data = data_cleaned)
 
+# Output the summary of the linear regression
+summary(model)
 ```
 
 ### 3 - Interpretation
 
 #### a. Coefficients Table
 
-| Predictor Variable                | Estimate | Std. Error | t-value | p-value  |
-|-----------------------------------|----------|------------|---------|----------|
-| **Intercept**                     | 8.50     | 0.50       | 17.0    | \< 0.001 |
-| **Engine Displacement**           | 0.003    | 0.0002     | 15.0    | \< 0.001 |
-| **Power**                         | -0.001   | 0.0001     | -10.0   | \< 0.001 |
-| **Powertrain Architecture (RWD)** | -0.30    | 0.20       | -1.5    | 0.15     |
-| **Generation (991)**              | -0.40    | 0.10       | -4.0    | \< 0.001 |
+| **Predictor Variable**    | **Estimate** | **Std. Error** | **t-value** | **p-value**     |
+|------------------|--------------|--------------|--------------|--------------|
+| **Intercept**             | 66.27        | 11.06          | 5.99        | \< 0.001 \*\*\* |
+| **Power**                 | -5.524e-07   | 1.903e-07      | -2.90       | 0.0099 \*\*     |
+| **Engine Displacement**   | 0.00869      | 0.001799       | 4.83        | \< 0.001 \*\*\* |
+| **Power to Weight Ratio** | -6.094e-06   | 2.055e-05      | -0.30       | 0.770           |
+| **Maximum Speed**         | -0.01893     | 0.008362       | -2.26       | 0.0369 \*       |
+| **Cylinder Bore**         | -0.5861      | 0.1230         | -4.77       | \< 0.001 \*\*\* |
+| **Piston Stroke**         | -0.3504      | 0.07449        | -4.71       | \< 0.001 \*\*\* |
 
-Each row represents one of the predictor variables in the model. The key columns are:
+a\. **Estimate**:
 
--   **Estimate**: This tells you how much the predictor affects the response variable (in this case, acceleration).
+-   Each row represents one of the predictor variables in the model. The key columns are:
 
-    -   The estimate for **Engine Displacement** is **0.003**, it means that for every 1 unit increase in engine displacement, the acceleration time (0-100 km/h) increases by 0.003 seconds, assuming all other variables are constant.
+    -   **Estimate**: This tells you how much the predictor affects the response variable (in this case, acceleration).
 
-    -   The estimate for **Power** is -0.001, it means that for every 1 unit increase in engine displacement, the acceleration time (0-100 km/h) decreases 0.001 seconds, assuming all other variables are constant.
+        -   The estimate for **Engine Displacement** is 0.00869. This means that for every 1 unit increase in engine displacement, the acceleration time (0-100 km/h) increases by **0.00869 seconds**, assuming all other variables are constant.
 
-    -   The estimate for **Generation** is -0.40, it means that for every 1 unit increase in engine displacement, the acceleration time (0-100 km/h) decreases 0.40 seconds, assuming all other variables are constant.
+        -   The estimate for **Power** is -5.524e-07. This means that for every 1 unit increase in power, the acceleration time (0-100 km/h) decreases by **0.0000005524 seconds**, assuming all other variables are constant. Though small, this is statistically significant.
 
-    -   The negative estimate value indicates that an increase in that variable reduces the acceleration time.
+        -   The estimate for **Maximum Speed** is -0.01893. This means that for every 1 unit increase in maximum speed, the acceleration time (0-100 km/h) decreases by **0.01893 seconds**, assuming all other variables are constant.
 
--   **p-value**:
+        -   The estimate for the The **Cylinder Bore** is -0.5861. This means that for every 1 unit increase in cylinder bore, the acceleration time decreases by **0.5861 seconds**.
 
-    -   **less than 0.05** means the variable significantly affects acceleration.
+        -   The estimate for **Piston Stroke** is -0.3504. This indicates that for every 1 unit increase in piston stroke, the acceleration time decreases by **0.3504 seconds**.
 
-    -   All variables except for Powertrain Architecture have a p-value of less that 0.05 therefore they all affect acceleration
+        -   The estimate for **the Power-to-Weight Ratio** is -6.094e-06, but it is not significant (p = 0.770), indicating little impact on acceleration.
 
-    -   The variable **Powertrain Architecture (RWD)** has a p-value of 0.15, so it is statistically insignificant.
+        -   The **Intercept** of 66.27 suggests that when all predictor variables are zero, the model would predict an acceleration time of **66.27 seconds**, though this is theoretical since zero values for these variables are unrealistic.
 
-#### b. **R-Squared Value**
+    ### b. **P-value**:
 
-The **R-squared** value represents how much of the variability in the response variable (acceleration) is explained by the model. It ranges from values in between 0 and 1:
+    The p-values tell us whether the predictor variables significantly affect acceleration. A p-value less than 0.05 indicates statistical significance.
 
--   **Closer to 1**: The model explains a large portion of the variability in acceleration.
+    -   **Power** has a p-value of **0.0099**, meaning it significantly affects acceleration.
 
--   **Closer to 0**: The model does not explain much of the variability in acceleration.
+    -   **Engine Displacement** has a p-value of **0.000156**, so it significantly affects acceleration.
 
-R-squared of 0.75 would mean that 75% of the variation in acceleration is explained by engine displacement, power, powertrain architecture, and generation.
+    -   **Maximum Speed** has a p-value of **0.0369**, indicating it is a statistically significant predictor.
+
+    -   **Cylinder Bore** and **Piston Stroke** have very small p-values (both \< 0.001), showing they are strong predictors of acceleration.
+
+    -   **Power to Weight Ratio** has a p-value of **0.770**, which is statistically insignificant.
+
+    Thus, all variables except **the Weight Ratio** are statistically significant and affect acceleration.
+
+    ### c. **R-Squared Value**:
+
+    -   The **R-squared value** is **0.9752**, meaning that the model's predictors (power, engine displacement, maximum speed, cylinder bore, and piston stroke) explain 97.52% of the variation in acceleration.
+
+    -   This indicates a very strong fit, meaning that these variables do a great job explaining the variability in acceleration times for the Porsche 911 cars.
+
+    ### e. **Residual Standard Error (RSE)**:
+
+    -   The **Residual Standard Error** is **0.2006**. This suggests that, on average, the actual acceleration times deviate from the predicted values by about **0.2006 seconds**.
+
+    -   A lower RSE indicates that the model has a relatively good fit to the data.
+
+    ### f. **F-Statistic and p-value for the Overall Model**:
+
+    -   The **F-statistic** is **111.6**, and the p-value is **1.063e-12**. This shows that the model, as a whole, is statistically significant, meaning that the combination of predictors does a good job explaining the variability in acceleration.
+
+    ### **Summary Interpretation**:
+
+    -   **Significant Variables**: Look at the p-values to identify which variables significantly influence acceleration. In this case, **Engine Displacement**, **Power**, **Maximum Speed**, **Cylinder Bore**, and **Piston Stroke** are significant.
+
+    -   **Effect Size**:
+
+        -   Higher **engine displacement** leads to slower acceleration (positive estimate).
+
+        -   More **power** leads to faster acceleration (negative estimate).
+
+        -   Larger **cylinder bore** and **piston stroke** lead to faster acceleration (both negative estimates).
+
+    -   **Model Fit**:
+
+        -   The **R-squared** value of 0.9752 indicates that the model explains 97.52% of the variability in acceleration.
+
+        -   The **F-statistic** confirms that the model is statistically significant overall, meaning that it effectively explains the variability in acceleration.
+
+    By interpreting these values, you can better understand how power, engine displacement, and other factors affect acceleration times in the Porsche 911 dataset.
